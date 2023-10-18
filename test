@@ -1,0 +1,180 @@
+#!/bin/bash
+
+if [ "$(atq | wc -l)" -eq 0 ]; then
+    exit 0
+# Sezione disattivata (Da tenere in caso serva)
+#elif [ "$(atq | grep -E '09:05:00|20:00:00' | wc -l)" -gt 0 ]; then
+#    original_shutdown_jobs=$(atq | grep -E '09:05:00|20:00:00' | awk '{print $1}')
+#elif [ "$(atq | wc -l)" -gt 0 ]; then
+#    delayed_shutdown_jobs=$(atq | awk '{print $1}')
+# Fine sezione disattivata
+else
+    shutdown_jobs=$(atq | awk '{print $1}')
+fi
+if [ "$(cat /var/log/test-avanzamento | wc -l)" -eq 2 ] && [ "$(cat /var/log/test-avanzamento | sed -n '1p;2q')" = "vero" ] && [ "$(cat /var/log/test-avanzamento | sed -n '2p;3q')" = "vero" ]; then
+    >/var/log/test-avanzamento
+    for job_id in $shutdown_jobs; do
+        atrm "$job_id" >/dev/null 2>&1
+    done
+    sleep 10
+    echo "/root/timer-spegnimento/shutdown.sh" | at now + 10 min >/dev/null 2>&1 #2>&1 | mail -s "Output shutdown's job!" io.mimmo77@gmail.com
+    exit 0
+elif [ "$(cat /var/log/test-avanzamento | wc -l)" -eq 2 ] &&
+(
+    (
+        [ "$(cat /var/log/test-avanzamento | sed -n '1p;2q')" = "vero" ] &&
+        [ "$(cat /var/log/test-avanzamento | sed -n '2p;3q')" = "falso" ]
+    ) ||
+    (
+        [ "$(cat /var/log/test-avanzamento | sed -n '1p;2q')" = "falso" ] &&
+        [ "$(cat /var/log/test-avanzamento | sed -n '2p;3q')" = "vero" ]
+    )
+); then
+    >/var/log/test-avanzamento
+    for job_id in $shutdown_jobs; do
+        atrm "$job_id" >/dev/null 2>&1
+    done
+    sleep 10
+    echo "/root/timer-spegnimento/shutdown.sh" | at now + 1 min >/dev/null 2>&1
+    exit 0
+elif [ "$(cat /var/log/test-avanzamento | wc -l)" -eq 2 ] && [ "$(cat /var/log/test-avanzamento | sed -n '1p;2q')" = "falso" ] && [ "$(cat /var/log/test-avanzamento | sed -n '2p;3q')" = "falso" ]; then
+    >/var/log/test-avanzamento
+    if [ "$(cat /var/log/mail-sent | sed -n '1p;2q')" = "sent" ]; then
+#        >/var/log/mail-sent
+        echo "not" >/var/log/mail-sent
+    fi
+#    echo "Spegnimento pbs.home in corso. Collegarsi tra 10 secondi per vedere se si e' spento" | mail -s "Spegnimento pbs.home" io.mimmo77@gmail.com
+    sleep 10
+#    shutdown -h now # Comando da abilitare solo quando si e' certi
+    echo "A questo punto si sarebbe dovuto spegnere il server pbs. Se si e' convinti che tutto funziona, procedi con la modifica dello script" | mail -s "Messaggio di test spegnimento" io.mimmo77@gmail.com
+    exit 0
+fi
+sleep 25
+# Controlla se ci sono task in esecuzione
+#if [ "$(cat /var/log/proxmox-backup/tasks/active | wc -l)" -eq 0 ]; then
+#    if [ "$(cat /var/log/test-avanzamento | wc -l)" -eq 0 ]; then
+#        echo "falso" >/var/log/test-avanzamento
+#        exec "$0"
+#    elif [ "$(cat /var/log/test-avanzamento | wc -l)" -eq 1 ]; then
+#        echo "falso" >>/var/log/test-avanzamento
+#        exec "$0"
+#    fi
+#---------------------test new lines
+#if { [ "$(who | wc -l)" -eq 0 ] || [ "$(w | grep 'tail -f /var/log/test-avanzamento' | wc -l)" -eq 1 ] || [ "$(w | grep 'tail -f /var/log/mail-sent' | wc -l)" -eq 1 ]; } && [ "$(cat /var/log/proxmox-backup/tasks/active | wc -l)" -eq 0 ]; then
+if (
+    [ "$(who | wc -l)" -eq 0 ] ||
+    (
+        [ "$(who | wc -l)" -eq 1 ] &&
+        [ "$(w | grep 'tail -f /var/log/test-avanzamento' | wc -l)" -eq 1 ]
+    ) ||
+    (
+        [ "$(who | wc -l)" -eq 1 ] &&
+        [ "$(w | grep 'tail -f /var/log/mail-sent' | wc -l)" -eq 1 ]
+    ) ||
+    (
+        [ "$(who | wc -l)" -eq 2 ] &&
+        [ "$(w | grep 'tail -f /var/log/test-avanzamento' | wc -l)" -eq 1 ] &&
+        [ "$(w | grep 'tail -f /var/log/mail-sent' | wc -l)" -eq 1 ]
+    )
+) &&
+#--->Check terminale solo su browser web
+(
+    [ "$(cat /var/log/proxmox-backup/tasks/active | wc -l)" -eq 0 ] ||
+    (
+        [ "$(cat /var/log/proxmox-backup/tasks/active | wc -l)" -eq 1 ] &&
+        [ "$(cat /var/log/proxmox-backup/tasks/active | grep 'termproxy' | wc -l" -eq 1 ] &&
+#--->        [ "$(who | wc -l)" -eq 1 ] && #Eliminare se non serve
+        (
+            [ "$(w | grep 'tail -f /var/log/test-avanzamento' | awk '{print $3}' | grep '-' | wc -l)" -eq 1 ] ||
+            [ "$(w | grep 'tail -f /var/log/mail-sent' | awk '{print $3}' | grep '-' | wc -l)" -eq 1 ]
+        )
+    )
+); then
+#--->EndCheck
+    if [ "$(cat /var/log/test-avanzamento | wc -l)" -eq 0 ]; then
+        echo "falso" >/var/log/test-avanzamento
+        exec "$0"
+    elif [ "$(cat /var/log/test-avanzamento | wc -l)" -eq 1 ]; then
+        echo "falso" >>/var/log/test-avanzamento
+        exec "$0"
+    fi
+#elif [ "$(who | wc -l)" -gt 0 ] && { [ "$(w | grep 'tail -f /var/log/test-avanzamento' | wc -l)" -eq 0 ] || [ "$(w | grep 'tail -f /var/log/mail-sent' | wc -l)" -eq 0 ]; }; then
+#--> Attenzione qui!!! Non cancellare i 3 tratti fino a che non si e sicuri
+elif [ "$(who | wc -l)" -gt 0 ] &&
+(
+#        [ "$(who | wc -l)" -gt 0 ] &&
+#-->        [ "$(cat /var/log/test-avanzamento | wc -l)" -le 1 ] &&
+    (
+        [ "$(w | grep 'tail -f /var/log/test-avanzamento' | wc -l)" -eq 0 ] &&
+        [ "$(w | grep 'tail -f /var/log/mail-sent' | wc -l)" -eq 0 ]
+    ) ||
+    (
+        [ "$(who | wc -l)" -gt 1 ] &&
+        [ "$(w | grep 'tail -f /var/log/test-avanzamento' | wc -l)" -eq 1 ]
+    ) ||
+    (
+        [ "$(who | wc -l)" -gt 1 ] &&
+        [ "$(w | grep 'tail -f /var/log/mail-sent' | wc -l)" -eq 1 ]
+    ) ||
+    (
+        [ "$(who | wc -l)" -gt 2 ] &&
+        [ "$(w | grep 'tail -f /var/log/test-avanzamento' | wc -l)" -eq 1 ] &&
+        [ "$(w | grep 'tail -f /var/log/mail-sent' | wc -l)" -eq 1 ]
+    )
+)&&
+    (
+       [ "$(cat /var/log/proxmox-backup/tasks/active | wc -l)" -eq 0 ] ||
+       [ "$(cat /var/log/proxmox-backup/tasks/active | grep 'termproxy' | wc -l)" -gt 0 ]
+    ); then
+    if [ "$(cat /var/log/test-avanzamento | wc -l)" -eq 0 ]; then
+        echo "vero" >/var/log/test-avanzamento
+        exec "$0"
+    elif [ "$(cat /var/log/test-avanzamento | wc -l)" -eq 1 ]; then
+        echo "vero" >>/var/log/test-avanzamento
+    fi
+    if [ "$(cat /var/log/mail-sent | sed -n '1p;2q')" = "not" ]; then
+        echo "sent" >/var/log/mail-sent
+        echo "Terminale aperto, per cui lo spegnimento del server verra' rimandato di 10 minuti in 10 fino a che non risulteranno tutti i terminali chiusi, includendo quelli su browser, in esclusione di eventuali tail -f per monitoraggio di questa funzione verranno ignorati, ma solo se i terminali sono solo quelli" | mail -s "Reinviato spegnimento pbs.home" io.mimmo77@gmail.com
+    fi
+    exec "$0"
+# ----------------------test end
+fi
+if cat /var/log/proxmox-backup/tasks/active | grep -q "verificationjob"; then
+    if [ "$(cat /var/log/test-avanzamento | wc -l)" -eq 0 ]; then
+        echo "vero" >/var/log/test-avanzamento
+        exec "$0"
+    elif [ "$(cat /var/log/test-avanzamento | wc -l)" -eq 1 ]; then
+        echo "vero" >>/var/log/test-avanzamento
+    fi
+    if [ "$(cat /var/log/mail-sent | sed -n '1p;2q')" = "not" ]; then
+        echo "sent" >/var/log/mail-sent
+        echo "Job di verifica in esecuzione. Lo spegnimento del server verra' rimandato di 10 minuti in 10 fino a che non risultera' in stand-by" | mail -s "Reinviato spegnimento pbs.home" io.mimmo77@gmail.com
+    fi
+    exec "$0"
+elif cat /var/log/proxmox-backup/tasks/active | grep -q "backup" || cat /var/log/proxmox-backup/tasks/active | grep -q "logrotate"; then
+    if [ "$(cat /var/log/test-avanzamento | wc -l)" -eq 0 ]; then
+        echo "vero" >/var/log/test-avanzamento
+        exec "$0"
+    elif [ "$(cat /var/log/test-avanzamento | wc -l)" -eq 1 ]; then
+        echo "vero" >>/var/log/test-avanzamento
+    fi
+    if [ "$(cat /var/log/mail-sent | sed -n '1p;2q')" = "not" ]; then
+        echo "sent" >/var/log/mail-sent
+        echo "Job di backup in esecuzione. Lo spegnimento del server verra' rimandato di 10 minuti in 10 fino a che non risultera' in stand-by" | mail -s "Reinviato spegnimento pbs.home" io.mimmo77@gmail.com
+    fi
+    exec "$0"
+elif cat /var/log/proxmox-backup/tasks/active | grep -q "garbage_collection"; then
+    if [ "$(cat /var/log/test-avanzamento | wc -l)" -eq 0 ]; then
+        echo "vero" >/var/log/test-avanzamento
+        exec "$0"
+    elif [ "$(cat /var/log/test-avanzamento | wc -l)" -eq 1 ]; then
+        echo "vero" >>/var/log/test-avanzamento
+    fi
+    if [ "$(cat /var/log/mail-sent | sed -n '1p;2q')" = "not" ]; then
+        echo "sent" >/var/log/mail-sent
+#####        echo "Job di 'garbage collection' in esecuzione. Lo spegnimento del server pbs.home verra' rimandato di 10 minuti in 10 fino a che non risultera' in stand-by" | mail -s "Reinviato spegnimento pbs.home" io.mimmo77@gmail.com
+    fi
+    exec "$0"
+else
+    echo "Job non previsto per cui spetta controllare la funzione" | mail -s "Errore!!! Correggere" io.mimmo77@gmail.com
+fi

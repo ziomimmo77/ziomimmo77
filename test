@@ -82,7 +82,7 @@ if (
     [ "$(cat /var/log/proxmox-backup/tasks/active | wc -l)" -eq 0 ] ||
     (
         [ "$(cat /var/log/proxmox-backup/tasks/active | wc -l)" -eq 1 ] &&
-        [ "$(cat /var/log/proxmox-backup/tasks/active | grep 'termproxy' | wc -l" -eq 1 ] &&
+        [ "$(cat /var/log/proxmox-backup/tasks/active | grep 'termproxy' | wc -l)" -eq 1 ] &&
 #--->        [ "$(who | wc -l)" -eq 1 ] && #Eliminare se non serve
         (
             [ "$(w | grep 'tail -f /var/log/test-avanzamento' | awk '{print $3}' | grep '-' | wc -l)" -eq 1 ] ||
